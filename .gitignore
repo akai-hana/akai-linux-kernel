@@ -1,0 +1,16 @@
+.build/
+out/
+*.orig
+*.rej
+*.swp
+*.swo
+*~
+*.tmp
+*.o
+*.ko
+*.ko.zst
+vmlinuz*
+initrd*
+System.map*
+Module.symvers
+modules.order

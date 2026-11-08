@@ -1,0 +1,11 @@
+diff --git a/kernel_module/Makefile b/kernel_module/Makefile
+index 473f60801c585165a01f2db289ecdbf2f1199c3b..8906ebfa08453ddc5d3327050c091d9f47310802 100644
+--- a/kernel_module/Makefile
++++ b/kernel_module/Makefile
+@@ -1,5 +1,5 @@
+ SHELL := /bin/bash
+-KERNELVERSION  ?= $(shell uname --kernel-release)
++KERNELVERSION  ?= $(shell uname -r)
+ KSRC := /lib/modules/$(KERNELVERSION)/build
+ 
+ #install dir for kernel drivers
