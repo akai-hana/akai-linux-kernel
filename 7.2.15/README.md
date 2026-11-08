@@ -93,8 +93,8 @@ The script then looks for the signed build output under
 `/var/lib/ckms/zfs/2.4.4/<release>/` and installs it as
 `/lib/modules/<release>/extra/zfs.ko.zst` and `spl.ko.zst`.
 
-The current `-03` module tree contains 166 module files. ZFS/SPL and
-legion-laptop all report:
+The current `-03` module tree contains 169 module files (including ZFS, SPL,
+and legion-laptop). ZFS/SPL and legion-laptop all report:
 
 ```
 vermagic: 7.2.15-eudaimonia-03 SMP preempt mod_unload
@@ -102,7 +102,9 @@ vermagic: 7.2.15-eudaimonia-03 SMP preempt mod_unload
 
 ZFS/SPL are signed by the build key with fingerprint
 `2C:8A:F1:6F:A6:17:31:52:81:53:67:CA:38:E7:00:01:F8:09:75:63`. That key is
-local and is not part of this repository.
+local and is not part of this repository. The installed `legion-laptop.ko` is
+currently unsigned, which is harmless because `MODULE_SIG_FORCE` is off; the
+verifier reports it as a warning.
 
 `legion-laptop` comes from
 `https://github.com/johnfanv2/LenovoLegionLinux.git` at
