@@ -20,11 +20,12 @@ remaining rebuildable on another machine from this repository alone.
 
 | Config | Status | Local version | `=y` / `=m` | Notes |
 | --- | --- | --- | --- | --- |
-| `config-7.2.15-eudaimonia-01` | known good, current ZFSBootMenu default | `-eudaimonia-01` | 2322 / 191 | BTF, Bluetooth and HDMI audio enabled. Fallback. |
-| `config-7.2.15-eudaimonia-02` | historical, do not use as-is | stored `-eudaimonia-01` | 2261 / 184 | Booted, but X failed because the boot entry was named `-02` while modules were installed for `-01`. The build script now derives the local version from the config filename. |
-| `config-7.2.15-eudaimonia-03` | current lean build, installed but not yet booted | `-eudaimonia-03` | 2117 / 165 | Bluetooth, HDMI audio, HDCP and BTF removed. ZFS/SPL and `legion-laptop` rebuilt. |
+| `config-7.2.15-eudaimonia-01` | known-good fallback, kernel `#8`, boot-tested | `-eudaimonia-01` | 2328 / 189 | Rebuilt from the known-good config with bridge support for Docker/netavark. BTF, Bluetooth and HDMI audio enabled. |
+| `config-7.2.15-eudaimonia-02` | historical, do not use as-is | stored `-eudaimonia-01` | 2261 / 184 | Historical `#4`. Booted, but X failed because the boot entry was named `-02` while modules were installed for `-01`. The build script now derives the local version from the config filename. |
+| `config-7.2.15-eudaimonia-03` | historical, do not use | `-eudaimonia-03` | 2117 / 165 | Historical lean `#7`. Panicked with `Attempted to kill init!`; cause not isolated. |
+| `config-7.2.15-eudaimonia-04` | current default, kernel `#9`, boot-tested | `-eudaimonia-04` | 2252 / 170 | Conservative trim based on `-02`: bridge enabled; Bluetooth and HDMI audio disabled. ZFS/SPL and `legion-laptop` rebuilt. |
 
-Both the `-01` and `-03` builds were compiled with **clang/LLD 22.1.8**
+The current `-01` and `-04` builds were compiled with **clang/LLD 22.1.8**
 (`CONFIG_CC_IS_CLANG=y`). The build script therefore defaults to `LLVM=1`.
 
 ## Repository layout
@@ -37,7 +38,7 @@ Both the `-01` and `-03` builds were compiled with **clang/LLD 22.1.8**
 │   └── eudaimonia.md        checklist for adding this repo to the meta-repo
 └── 7.2.15/
     ├── build.conf           versions, refs, default config
-    ├── configs/             the three config variants
+    ├── configs/             the four config variants
     ├── patches/
     │   ├── 0001-linux-tkg-and-local.patch
     │   ├── custom/          original preempt + BBR3 patches (reference)
@@ -62,7 +63,7 @@ toolchain, kernel build dependencies, `ckms` with the ZFS 2.4.4 source for a
 ZFS-root machine, and network access for the kernel and LenovoLegionLinux
 clones.
 
-Build and install the default (`-03`) configuration:
+Build and install the default (`-04`) configuration:
 
 ```sh
 git clone git@github.com:akai-hana/akai-linux-kernel.git
@@ -76,7 +77,7 @@ Reuse the already-patched source tree on this laptop:
 sudo ./build.sh --source /usr/src/ltkg-7.2.15/linux-src-git-07 --skip-patches
 ```
 
-Build the known-good profile (BTF is enabled there, so `pahole` is required):
+Build the known-good fallback profile (BTF is enabled there, so `pahole` is required):
 
 ```sh
 sudo ./build.sh --config 7.2.15/configs/config-7.2.15-eudaimonia-01
@@ -91,7 +92,7 @@ sudo ./build.sh --skip-install
 Verify an installed release:
 
 ```sh
-./verify.sh --krel 7.2.15-eudaimonia-03
+./verify.sh --krel 7.2.15-eudaimonia-04
 ```
 
 Run `./build.sh --help` for every option.
@@ -119,15 +120,10 @@ The ZFSBootMenu property currently uses a trailing `$`:
 
 ```sh
 zfs get org.zfsbootmenu:kernel rpool/ROOT/chimera
-# vmlinuz-7.2.15-eudaimonia-01$
+# vmlinuz-7.2.15-eudaimonia-04$
 ```
 
-To test the new kernel, set the property to the `-03` entry (keep the trailing
-`$`), reboot, and select the entry if needed:
-
-```sh
-sudo zfs set org.zfsbootmenu:kernel='vmlinuz-7.2.15-eudaimonia-03$' rpool/ROOT/chimera
-```
+The lean `-04` kernel is the current default and has booted successfully.
 
 If it fails, boot the `-01` entry from ZFSBootMenu and restore:
 
@@ -135,10 +131,9 @@ If it fails, boot the `-01` entry from ZFSBootMenu and restore:
 sudo zfs set org.zfsbootmenu:kernel='vmlinuz-7.2.15-eudaimonia-01$' rpool/ROOT/chimera
 ```
 
-The `-03` image is installed but untested. A previous attempt (`#5`) panicked
-with `Attempted to kill init!`; the cause is still unknown. pstore is enabled
-in the lean config, so check `/sys/fs/pstore` after a failed boot. Keep the
-known-good `-01` entry available.
+The historical `-03` (`#7`) panicked with `Attempted to kill init!`; the cause
+is still unknown. pstore is enabled in `-04`, so check `/sys/fs/pstore` after a
+failed boot.
 
 ## Notes
 

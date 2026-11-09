@@ -132,14 +132,29 @@ if [[ -f "$CONFIG" ]]; then
     config_is CONFIG_PSTORE y
     config_not CONFIG_MODULE_SIG_FORCE
 
+    if [[ "$KREL" == *-eudaimonia-01* || "$KREL" == *-eudaimonia-04* ]]; then
+        config_is CONFIG_BRIDGE y
+        config_is CONFIG_BRIDGE_NETFILTER y
+        config_is CONFIG_VETH m
+    fi
+
     if [[ "$KREL" == *-eudaimonia-03* ]]; then
         config_is CONFIG_TCP_CONG_BBR3 m
         config_not CONFIG_BT
         config_not CONFIG_SND_HDA_CODEC_HDMI
         config_not CONFIG_DRM_AMD_DC_HDCP
         config_not CONFIG_DEBUG_INFO_BTF
-    else
-        note "lean-profile checks skipped for $KREL (only -03 is lean)"
+    fi
+
+    if [[ "$KREL" == *-eudaimonia-04* ]]; then
+        config_is CONFIG_TCP_CONG_BBR3 m
+        config_not CONFIG_BT
+        config_not CONFIG_SND_HDA_CODEC_HDMI
+        config_not CONFIG_DRM_PANIC
+    fi
+
+    if [[ "$KREL" != *-eudaimonia-01* && "$KREL" != *-eudaimonia-03* && "$KREL" != *-eudaimonia-04* ]]; then
+        note "profile-specific checks skipped for $KREL"
     fi
 fi
 
@@ -153,6 +168,14 @@ if [[ -d "$MODDIR" ]]; then
     else
         bad "missing $MODDIR/modules.dep"
     fi
+
+    if [[ "$KREL" == *-eudaimonia-01* || "$KREL" == *-eudaimonia-04* ]]; then
+        if grep -qE '(^|/)bridge\.ko$' "$MODDIR/modules.builtin"; then
+            pass "bridge is built in"
+        else
+            bad "bridge is not built in"
+        fi
+    fi
 else
     bad "missing module tree: $MODDIR"
 fi
@@ -164,7 +187,11 @@ fi
 if [[ $SKIP_LEGION -eq 0 ]]; then
     check_module legion-laptop
 fi
-if [[ "$KREL" == *-eudaimonia-03* ]]; then
+if [[ "$KREL" == *-eudaimonia-01* || "$KREL" == *-eudaimonia-04* ]]; then
+    check_module snd-hda-codec-alc269
+    check_module snd-hda-codec-realtek-lib
+fi
+if [[ "$KREL" == *-eudaimonia-03* || "$KREL" == *-eudaimonia-04* ]]; then
     check_module tcp_bbr3
 fi
 
