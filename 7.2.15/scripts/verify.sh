@@ -132,7 +132,7 @@ if [[ -f "$CONFIG" ]]; then
     config_is CONFIG_PSTORE y
     config_not CONFIG_MODULE_SIG_FORCE
 
-    if [[ "$KREL" == *-eudaimonia-01* || "$KREL" == *-eudaimonia-04* ]]; then
+    if [[ "$KREL" == *-eudaimonia-01* || "$KREL" == *-eudaimonia-04* || "$KREL" == *-eudaimonia-05* ]]; then
         config_is CONFIG_BRIDGE y
         config_is CONFIG_BRIDGE_NETFILTER y
         config_is CONFIG_VETH m
@@ -153,7 +153,24 @@ if [[ -f "$CONFIG" ]]; then
         config_not CONFIG_DRM_PANIC
     fi
 
-    if [[ "$KREL" != *-eudaimonia-01* && "$KREL" != *-eudaimonia-03* && "$KREL" != *-eudaimonia-04* ]]; then
+    if [[ "$KREL" == *-eudaimonia-05* ]]; then
+        config_is CONFIG_TCP_CONG_BBR3 m
+        config_not CONFIG_BT
+        config_not CONFIG_SND_HDA_CODEC_HDMI
+        config_not CONFIG_DRM_PANIC
+        config_is CONFIG_INTEL_RAPL m
+        config_not CONFIG_CPU_SUP_INTEL
+        config_not CONFIG_NUMA
+        config_not CONFIG_HIBERNATION
+        config_not CONFIG_HSA_AMD
+        config_is CONFIG_KEXEC y
+        config_is CONFIG_KEXEC_FILE y
+        config_is CONFIG_DEBUG_INFO_BTF y
+        config_is CONFIG_AMD_MEM_ENCRYPT y
+        config_is CONFIG_KVM_AMD m
+    fi
+
+    if [[ "$KREL" != *-eudaimonia-01* && "$KREL" != *-eudaimonia-03* && "$KREL" != *-eudaimonia-04* && "$KREL" != *-eudaimonia-05* ]]; then
         note "profile-specific checks skipped for $KREL"
     fi
 fi
@@ -169,7 +186,7 @@ if [[ -d "$MODDIR" ]]; then
         bad "missing $MODDIR/modules.dep"
     fi
 
-    if [[ "$KREL" == *-eudaimonia-01* || "$KREL" == *-eudaimonia-04* ]]; then
+    if [[ "$KREL" == *-eudaimonia-01* || "$KREL" == *-eudaimonia-04* || "$KREL" == *-eudaimonia-05* ]]; then
         if grep -qE '(^|/)bridge\.ko$' "$MODDIR/modules.builtin"; then
             pass "bridge is built in"
         else
@@ -187,11 +204,11 @@ fi
 if [[ $SKIP_LEGION -eq 0 ]]; then
     check_module legion-laptop
 fi
-if [[ "$KREL" == *-eudaimonia-01* || "$KREL" == *-eudaimonia-04* ]]; then
+if [[ "$KREL" == *-eudaimonia-01* || "$KREL" == *-eudaimonia-04* || "$KREL" == *-eudaimonia-05* ]]; then
     check_module snd-hda-codec-alc269
     check_module snd-hda-codec-realtek-lib
 fi
-if [[ "$KREL" == *-eudaimonia-03* || "$KREL" == *-eudaimonia-04* ]]; then
+if [[ "$KREL" == *-eudaimonia-03* || "$KREL" == *-eudaimonia-04* || "$KREL" == *-eudaimonia-05* ]]; then
     check_module tcp_bbr3
 fi
 

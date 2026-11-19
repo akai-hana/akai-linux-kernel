@@ -23,10 +23,12 @@ remaining rebuildable on another machine from this repository alone.
 | `config-7.2.15-eudaimonia-01` | known-good fallback, kernel `#8`, boot-tested | `-eudaimonia-01` | 2328 / 189 | Rebuilt from the known-good config with bridge support for Docker/netavark. BTF, Bluetooth and HDMI audio enabled. |
 | `config-7.2.15-eudaimonia-02` | historical, do not use as-is | stored `-eudaimonia-01` | 2261 / 184 | Historical `#4`. Booted, but X failed because the boot entry was named `-02` while modules were installed for `-01`. The build script now derives the local version from the config filename. |
 | `config-7.2.15-eudaimonia-03` | historical, do not use | `-eudaimonia-03` | 2117 / 165 | Historical lean `#7`. Panicked with `Attempted to kill init!`; cause not isolated. |
-| `config-7.2.15-eudaimonia-04` | current default, kernel `#9`, boot-tested | `-eudaimonia-04` | 2252 / 170 | Conservative trim based on `-02`: bridge enabled; Bluetooth and HDMI audio disabled. ZFS/SPL and `legion-laptop` rebuilt. |
+| `config-7.2.15-eudaimonia-04` | previous default, ZFSBootMenu default, kernel `#9`, boot-tested | `-eudaimonia-04` | 2252 / 170 | Conservative trim based on `-02`: bridge enabled; Bluetooth and HDMI audio disabled. ZFS/SPL and `legion-laptop` rebuilt. |
+| `config-7.2.15-eudaimonia-05` | current build default, installed, not yet boot-tested | `-eudaimonia-05` | 2037 / 163 | Leaner AMD-only profile: no Intel CPU support, NUMA, hibernation, HSA/P2P, ATA/SATA, legacy USB HCI, inactive LSMs, or zswap. Keeps AMD IOMMU/pstate, RAPL, KVM/VFIO/vhost, BBR3, and the same GPU/audio/Wi-Fi/Ethernet drivers. Adds the amd-pstate EPP boost patch. |
 
-The current `-01` and `-04` builds were compiled with **clang/LLD 22.1.8**
-(`CONFIG_CC_IS_CLANG=y`). The build script therefore defaults to `LLVM=1`.
+The current `-01`, `-04`, and `-05` builds were compiled with **clang/LLD
+22.1.8** (`CONFIG_CC_IS_CLANG=y`). The build script therefore defaults to
+`LLVM=1`.
 
 ## Repository layout
 
@@ -38,9 +40,10 @@ The current `-01` and `-04` builds were compiled with **clang/LLD 22.1.8**
 │   └── eudaimonia.md        checklist for adding this repo to the meta-repo
 └── 7.2.15/
     ├── build.conf           versions, refs, default config
-    ├── configs/             the four config variants
+    ├── configs/             the five config variants
     ├── patches/
     │   ├── 0001-linux-tkg-and-local.patch
+    │   ├── 0002-amd-pstate-epp-boost.patch
     │   ├── custom/          original preempt + BBR3 patches (reference)
     │   └── legion/          LenovoLegionLinux Makefile fix
     ├── scripts/
@@ -50,11 +53,13 @@ The current `-01` and `-04` builds were compiled with **clang/LLD 22.1.8**
     └── zfs/                 ckms package configuration
 ```
 
-The combined patch is against upstream `v7.2.15` (`03c639b`) and contains
+The base combined patch is against upstream `v7.2.15` (`03c639b`) and contains
 96 files: 4249 insertions, 324 deletions. It includes the linux-tkg 7.2
 changes (BORE scheduler, O3, native tuning, etc.), the preempt fixes, BBR3,
 and the three new source files (`kernel/sched/bore.c`,
-`include/linux/sched/bore.h`, `net/ipv4/tcp_bbr3.c`).
+`include/linux/sched/bore.h`, `net/ipv4/tcp_bbr3.c`). A second patch,
+`0002-amd-pstate-epp-boost.patch`, adds the CachyOS per-core EPP boost for
+recently-busy CPUs.
 
 ## Quick start
 
@@ -63,7 +68,7 @@ toolchain, kernel build dependencies, `ckms` with the ZFS 2.4.4 source for a
 ZFS-root machine, and network access for the kernel and LenovoLegionLinux
 clones.
 
-Build and install the default (`-04`) configuration:
+Build and install the default (`-05`) configuration:
 
 ```sh
 git clone git@github.com:akai-hana/akai-linux-kernel.git
@@ -92,7 +97,7 @@ sudo ./build.sh --skip-install
 Verify an installed release:
 
 ```sh
-./verify.sh --krel 7.2.15-eudaimonia-04
+./verify.sh --krel 7.2.15-eudaimonia-05
 ```
 
 Run `./build.sh --help` for every option.
@@ -100,7 +105,8 @@ Run `./build.sh --help` for every option.
 ## What build.sh does
 
 1. Clones the stable kernel at `v7.2.15` (or reuses `--source`).
-2. Applies `patches/0001-linux-tkg-and-local.patch` unless `--skip-patches`.
+2. Applies the patch series in `patches/series` (`0001` then `0002`) unless
+   `--skip-patches`.
 3. Copies the selected config and sets `CONFIG_LOCALVERSION` from the config
    filename. This deliberately overrides the stale value inside the `-02`
    config and refuses to continue if `make kernelrelease` does not match.
@@ -116,14 +122,22 @@ manual, reversible step.
 
 ## Testing and rollback
 
-The ZFSBootMenu property currently uses a trailing `$`:
+The ZFSBootMenu property still points at the boot-tested `-04` kernel and uses
+a trailing `$`:
 
 ```sh
 zfs get org.zfsbootmenu:kernel rpool/ROOT/chimera
 # vmlinuz-7.2.15-eudaimonia-04$
 ```
 
-The lean `-04` kernel is the current default and has booted successfully.
+`-05` is installed under `/boot` but has not been boot-tested yet. Boot its
+entry explicitly from ZFSBootMenu, or set the property manually when ready:
+
+```sh
+sudo zfs set org.zfsbootmenu:kernel='vmlinuz-7.2.15-eudaimonia-05$' rpool/ROOT/chimera
+```
+
+The boot-tested `-04` kernel remains the safe default until `-05` boots.
 
 If it fails, boot the `-01` entry from ZFSBootMenu and restore:
 
@@ -132,8 +146,8 @@ sudo zfs set org.zfsbootmenu:kernel='vmlinuz-7.2.15-eudaimonia-01$' rpool/ROOT/c
 ```
 
 The historical `-03` (`#7`) panicked with `Attempted to kill init!`; the cause
-is still unknown. pstore is enabled in `-04`, so check `/sys/fs/pstore` after a
-failed boot.
+is still unknown. pstore is enabled in `-04` and `-05`, so check
+`/sys/fs/pstore` after a failed boot.
 
 ## Notes
 
@@ -147,6 +161,13 @@ failed boot.
 - The `tkg/` files record how the tree was originally configured. The build
   script does not run linux-tkg; the combined patch is the authoritative input.
 - On this system use `dinitctl`, not `systemctl`.
+- `-05` removes Intel CPU support (`CPU_SUP_INTEL`, `X86_INTEL_PSTATE`,
+  `INTEL_IDLE`, Intel IOMMU) but keeps `INTEL_RAPL` because it drives AMD RAPL.
+  AMD mitigations and `KEXEC`/`KEXEC_FILE` remain; only Intel-specific
+  mitigations and `KEXEC_JUMP` are gone.
+- Enable the EPP boost at runtime with
+  `echo 1 > /sys/module/amd_pstate/parameters/epp_boost`. It has little effect
+  while the boot command line forces EPP `performance`.
 
 ## License and credits
 

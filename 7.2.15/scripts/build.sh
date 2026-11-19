@@ -48,7 +48,7 @@ options:
   --legion-source DIR    use an existing LenovoLegionLinux checkout
   --jobs N, -j N         build parallelism (default: nproc)
   --compiler NAME        compiler toolchain: llvm (default) or gcc
-  --skip-patches         do not apply patches/0001-... (tree must be ready)
+  --skip-patches         do not apply the patch series (tree must be ready)
   --skip-install         compile only; do not install anything
   --skip-zfs             do not build/install ZFS and SPL
   --skip-legion          do not build/install the legion-laptop module
@@ -123,6 +123,16 @@ CONFIG_PATH="$CONFIG_DIR/$(basename -- "$CONFIG_PATH")"
 [[ -f "$KERNEL_PATCH" ]] || die "kernel patch not found: $KERNEL_PATCH"
 [[ -f "$LEGION_PATCH" ]] || die "legion patch not found: $LEGION_PATCH"
 
+KERNEL_PATCH_LIST=("$KERNEL_PATCH")
+if [[ -n "${KERNEL_EXTRA_PATCHES:-}" ]]; then
+    read -r -a _extra_patches <<< "$KERNEL_EXTRA_PATCHES"
+    for _patch in "${_extra_patches[@]}"; do
+        [[ "$_patch" = /* ]] || _patch="$REPO/$_patch"
+        [[ -f "$_patch" ]] || die "kernel patch not found: $_patch"
+        KERNEL_PATCH_LIST+=("$_patch")
+    done
+fi
+
 if [[ -n "$SOURCE_DIR" ]]; then
     SOURCE_DIR=$(cd -- "$SOURCE_DIR" 2>/dev/null && pwd) \
         || die "source directory not found: $SOURCE_DIR"
@@ -189,7 +199,7 @@ if [[ $SKIP_INSTALL -eq 0 && $SKIP_ZFS -eq 0 ]]; then
     need_cmd ckms
 fi
 
-if [[ -d "$SOURCE_DIR/.git" ]]; then
+if [[ -e "$SOURCE_DIR/.git" ]]; then
     log "using kernel source: $SOURCE_DIR"
 else
     if [[ -d "$SOURCE_DIR" && -n "$(ls -A "$SOURCE_DIR" 2>/dev/null)" ]]; then
@@ -202,14 +212,16 @@ fi
 log "source version: $(git -C "$SOURCE_DIR" describe --tags --always 2>/dev/null || echo unknown)"
 
 if [[ $SKIP_PATCHES -eq 0 ]]; then
-    if git -C "$SOURCE_DIR" apply --check "$KERNEL_PATCH" 2>/dev/null; then
-        log "applying $KERNEL_PATCH"
-        git -C "$SOURCE_DIR" apply "$KERNEL_PATCH"
-    elif git -C "$SOURCE_DIR" apply --reverse --check "$KERNEL_PATCH" 2>/dev/null; then
-        log "kernel patch is already applied"
-    else
-        die "kernel patch does not apply; prepare the tree or use --skip-patches if it is already patched"
-    fi
+    for patch in "${KERNEL_PATCH_LIST[@]}"; do
+        if git -C "$SOURCE_DIR" apply --check "$patch" 2>/dev/null; then
+            log "applying $patch"
+            git -C "$SOURCE_DIR" apply "$patch"
+        elif git -C "$SOURCE_DIR" apply --reverse --check "$patch" 2>/dev/null; then
+            log "kernel patch is already applied: $patch"
+        else
+            die "kernel patch does not apply: $patch; prepare the tree or use --skip-patches if it is already patched"
+        fi
+    done
 fi
 
 log "using config: $CONFIG_PATH"
@@ -264,13 +276,15 @@ if [[ $SKIP_INSTALL -eq 1 ]]; then
 fi
 
 log "installing modules"
-make -C "$SOURCE_DIR" "${MAKE_ARGS[@]}" -j"$JOBS" modules_install
+make -C "$SOURCE_DIR" "${MAKE_ARGS[@]}" -j"$JOBS" INSTALL_MOD_STRIP=1 modules_install
 log "installing kernel image"
 make -C "$SOURCE_DIR" "${MAKE_ARGS[@]}" install
 
 install -m 644 "$SOURCE_DIR/.config" "/boot/config-$KREL"
 [[ -f "$SOURCE_DIR/System.map" ]] && install -m 644 "$SOURCE_DIR/System.map" "/boot/System.map-$KREL"
-[[ -s "/boot/vmlinuz-$KREL" ]] || die "missing /boot/vmlinuz-$KREL after make install"
+[[ -s "$SOURCE_DIR/arch/x86/boot/bzImage" ]] || die "missing $SOURCE_DIR/arch/x86/boot/bzImage"
+install -m 644 "$SOURCE_DIR/arch/x86/boot/bzImage" "/boot/vmlinuz-$KREL"
+[[ -s "/boot/vmlinuz-$KREL" ]] || die "missing /boot/vmlinuz-$KREL after install"
 MODDIR="/lib/modules/$KREL"
 [[ -d "$MODDIR" ]] || die "missing module tree: $MODDIR"
 if [[ ! -e "$MODDIR/build" ]]; then
@@ -291,12 +305,18 @@ if [[ $SKIP_ZFS -eq 0 ]]; then
     fi
 
     if ! ckms "${CKMS_ARGS[@]}" install "zfs=$ZFS_VERSION"; then
-        warn "ckms install returned an error; checking for prebuilt modules"
+        warn "ckms install returned an error; trying to build it first"
+        if ckms "${CKMS_ARGS[@]}" build "zfs=$ZFS_VERSION"; then
+            ckms "${CKMS_ARGS[@]}" install "zfs=$ZFS_VERSION" \
+                || warn "ckms install still failed; checking for prebuilt modules"
+        else
+            warn "ckms build failed; checking for prebuilt modules"
+        fi
     fi
 
     for m in zfs spl; do
         if ! modinfo -k "$KREL" -F vermagic "$m" >/dev/null 2>&1; then
-            src=$(find "$CKMS_STATE/zfs/$ZFS_VERSION/$KREL" -type f -name "$m.ko" 2>/dev/null | head -n 1)
+            src=$(find "$CKMS_STATE/zfs/$ZFS_VERSION/$KREL" -type f -name "$m.ko" 2>/dev/null | head -n 1 || true)
             [[ -n "$src" ]] || die "ZFS module '$m' was not installed and no prebuilt $m.ko exists for $KREL"
             install -d "$MODDIR/extra"
             zstd -q -f -19 "$src" -o "$MODDIR/extra/$m.ko.zst"
@@ -330,7 +350,7 @@ if [[ $SKIP_LEGION -eq 0 ]]; then
     fi
 
     log "building legion-laptop for $KREL"
-    make -C "$LEGION_SRC/kernel_module" KERNELVERSION="$KREL" -j"$JOBS"
+    make -C "$LEGION_SRC/kernel_module" "${MAKE_ARGS[@]}" KERNELVERSION="$KREL" -j"$JOBS"
     install -D -m 644 "$LEGION_SRC/kernel_module/legion-laptop.ko" "$MODDIR/extra/legion-laptop.ko"
     depmod -a "$KREL"
 fi

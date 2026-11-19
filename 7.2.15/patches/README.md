@@ -29,12 +29,38 @@ git apply --check /path/to/0001-linux-tkg-and-local.patch
 git apply /path/to/0001-linux-tkg-and-local.patch
 ```
 
-`scripts/build.sh` does this automatically. `series` lists the patch for
+`scripts/build.sh` does this automatically. `series` lists the patches for
 tooling that understands a quilt-style series file.
 
 The original tkg patch directory is not duplicated here: the combined patch is
 the exact result, including new files. The `tkg/` directory records the tkg
 configuration used to create it.
+
+## amd-pstate EPP boost
+
+`0002-amd-pstate-epp-boost.patch` adds the CachyOS `7.2/amd-pstate` per-core
+EPP boost for recently-busy CPUs, targeting game render threads that sleep on
+futexes between frames. It is a backport of five commits:
+
+- `f1e489611c83` cpufreq/amd-pstate: Cache firmware programmed EPP value
+- `7f81fd315ee6` cpufreq/amd-pstate: Document missing kernel-doc members
+- `23d537e7da52` cpufreq/amd-pstate: Update `cppc_req_cached` before writing MSR
+- `ed74145e0698` cpufreq/amd-pstate: Add per-core EPP boost for recently-busy CPUs
+- `d0501b00998e` cpufreq/amd-pstate: Document `epp_boost` parameter
+
+The other commits in that series are already present in `v7.2.15`
+(`58483b9d3aa9`, `9ca9911f0916`, `52385bbd5760`, `33ebf18e6d24`,
+`eb21749db712`, `d47bfc6e6372`).
+
+The feature is opt-in and defaults to off. Enable it at runtime with:
+
+```sh
+echo 1 > /sys/module/amd_pstate/parameters/epp_boost
+```
+
+It only acts in active mode on MSR/CPPC systems. With the current boot command
+line forcing EPP `performance`, it has little effect; it becomes useful if EPP
+is lowered to `balance_performance` or dynamic EPP is enabled.
 
 ## `custom/`
 

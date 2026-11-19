@@ -1,7 +1,8 @@
 # Linux 7.2.15
 
 Base: upstream stable `v7.2.15` (`03c639b`, "Linux 7.2.15").
-Patch set: `patches/0001-linux-tkg-and-local.patch`.
+Patch set: `patches/0001-linux-tkg-and-local.patch` plus
+`patches/0002-amd-pstate-epp-boost.patch`.
 Toolchain: clang/LLD 22.1.8, `LLVM=1`, `CONFIG_CC_IS_CLANG=y`.
 
 ## Configurations
@@ -11,7 +12,8 @@ Toolchain: clang/LLD 22.1.8, `LLVM=1`, `CONFIG_CC_IS_CLANG=y`.
 | `configs/config-7.2.15-eudaimonia-01` | `-eudaimonia-01` | 216,065 B | 2328 / 189 | Known-good fallback; kernel `#8`; rebuilt from the known-good config with `CONFIG_BRIDGE=y` and `CONFIG_BRIDGE_NETFILTER=y` for Docker/netavark. BTF, Bluetooth and HDMI audio enabled. Boot-tested. |
 | `configs/config-7.2.15-eudaimonia-02` | stored `-eudaimonia-01` | 213,069 B | 2261 / 184 | Historical `#4`; booted but X failed because the module tree did not match. Do not build as-is. |
 | `configs/config-7.2.15-eudaimonia-03` | `-eudaimonia-03` | 206,843 B | 2117 / 165 | Historical lean `#7`; panicked with `Attempted to kill init!`. Do not use. |
-| `configs/config-7.2.15-eudaimonia-04` | `-eudaimonia-04` | 212,222 B | 2252 / 170 | Current default; conservative lean `#9` based on the `-02` config. Bridge enabled; Bluetooth and HDMI audio disabled. Boot-tested. |
+| `configs/config-7.2.15-eudaimonia-04` | `-eudaimonia-04` | 212,222 B | 2252 / 170 | Previous default and current ZFSBootMenu default; conservative lean `#9` based on the `-02` config. Bridge enabled; Bluetooth and HDMI audio disabled. Boot-tested. |
+| `configs/config-7.2.15-eudaimonia-05` | `-eudaimonia-05` | 187,572 B | 2037 / 163 | Current build default; leaner AMD-only profile based on `-04`. Installed and statically verified, not yet boot-tested. Adds the amd-pstate EPP boost patch. |
 
 ### The `-02` local-version bug
 
@@ -46,9 +48,43 @@ The historical `-03` profile removed BTF and HDCP as well, but it panicked
 before init; do not reuse it. The cause was not isolated, so `-04` deliberately
 stays closer to the bootable `-02` config.
 
+### The lean `-05` profile
+
+`-05` starts from the boot-tested `-04` config and removes hardware and
+features this laptop does not use, while keeping the gaming and container
+paths. The main removals are:
+
+- Intel CPU support: `PROCESSOR_SELECT=y` makes `CPU_SUP_INTEL` visible, then
+  `CPU_SUP_INTEL`, `CPU_SUP_HYGON`, `CPU_SUP_CENTAUR`, and `CPU_SUP_ZHAOXIN`
+  are disabled. `CPU_SUP_AMD=y` remains.
+- Intel platform pieces: `X86_INTEL_PSTATE`, `INTEL_IDLE`, Intel IOMMU,
+  `INTEL_SCU*`, `INTEL_SOC_PMIC*`, `X86_INTEL_LPSS`, and `INTEL_TURBO_MAX_3`
+  are absent. `INTEL_RAPL=m` is kept because the RAPL driver supports AMD.
+- NUMA, memory hotplug/hotremove, ACPI hotplug, and hibernation.
+- HSA/ROCm device memory: `HSA_AMD*`, `DEVICE_PRIVATE`, `ZONE_DEVICE`,
+  `PCI_P2PDMA`, and `HSA_AMD_SVM` are disabled. `HMM_MIRROR` and
+  `DRM_AMDGPU_USERPTR` remain for the graphics stack.
+- ATA/SATA, legacy USB EHCI/OHCI/UHCI, old PMIC/MFD/GPIO/PINCTRL/SPI drivers,
+  DVB/media capture hardware, and inactive LSMs.
+- `ZSWAP`/`ZSMALLOC`, `FUSE_DAX`/`FUSE_PASSTHROUGH`, `DRM_AMD_SECURE_DISPLAY`,
+  and unused TCP congestion modules. The default congestion control remains
+  `cubic`; BBR/BBR3 stay available.
+
+Retained: `SCHED_BORE`, BBR3, O3/native tuning, `DRM_AMDGPU=m`,
+`DRM_AMD_DC=y`, `SND_HDA_INTEL=m` with Realtek/ALC269, `MT7921E=m`,
+`R8169=m`, `AMD_IOMMU=y`, `X86_AMD_PSTATE=y`, `INTEL_RAPL=m`, NVMe, XHCI,
+USB4/Thunderbolt, bridge/veth/nftables, KVM/AMD-V, VFIO, vhost, pstore,
+`CONFIG_DEBUG_INFO_BTF=y`, and the legion-laptop module. `KEXEC` and
+`KEXEC_FILE` remain for ZFSBootMenu; only `KEXEC_JUMP` is gone because
+hibernation is disabled.
+
+AMD CPU mitigations (`RETPOLINE`, `RETHUNK`, `UNRET_ENTRY`, `IBPB_ENTRY`,
+`SRSO`, `SLS`, `RETBLEED`, `SPECTRE_V1/V2`, `SSB`, `TSA`, `VMSCAPE`) remain.
+Only Intel-specific mitigations disappear with `CPU_SUP_INTEL`.
+
 ### Docker bridge and audio
 
-Both current configs set `CONFIG_BRIDGE=y`, `CONFIG_BRIDGE_NETFILTER=y`,
+`-01`, `-04`, and `-05` set `CONFIG_BRIDGE=y`, `CONFIG_BRIDGE_NETFILTER=y`,
 `CONFIG_STP=y`, and `CONFIG_LLC=y`; `CONFIG_VETH=m` remains. This fixes the
 netavark `Not supported (os error 95)` error.
 
@@ -57,9 +93,10 @@ The Realtek ALC257 is handled by `snd-hda-codec-alc269` plus
 `snd-hda-codec-realtek` in this kernel, so `modinfo snd_hda_codec_realtek`
 reporting "MISSING" is expected and does not mean analog audio is broken.
 
-`X86_INTEL_PSTATE=y` remains force-selected by `CPU_SUP_INTEL` even though the
-CPU is AMD; it is not used at runtime. `MODULE_SIG=y` and `MODULE_SIG_ALL=y`
-are enabled, while `MODULE_SIG_FORCE` is off.
+`-04` still carries `X86_INTEL_PSTATE=y` because it keeps `CPU_SUP_INTEL`.
+`-05` disables Intel CPU support, so `X86_INTEL_PSTATE` and `INTEL_IDLE` are
+absent; AMD uses `X86_AMD_PSTATE=y`. `MODULE_SIG=y` and `MODULE_SIG_ALL=y` are
+enabled, while `MODULE_SIG_FORCE` is off.
 
 ## Build
 
@@ -69,7 +106,7 @@ From the repository root:
 sudo ./build.sh
 ```
 
-This uses `configs/config-7.2.15-eudaimonia-04` by default. Other examples:
+This uses `configs/config-7.2.15-eudaimonia-05` by default. Other examples:
 
 ```sh
 sudo ./build.sh --config 7.2.15/configs/config-7.2.15-eudaimonia-01
@@ -111,11 +148,11 @@ The script then looks for the signed build output under
 `/var/lib/ckms/zfs/2.4.4/<release>/` and installs it as
 `/lib/modules/<release>/extra/zfs.ko.zst` and `spl.ko.zst`.
 
-The current `-04` module tree contains 173 module files (including ZFS, SPL,
-and legion-laptop). ZFS/SPL and legion-laptop all report:
+The `-05` module tree contains 167 module files (including ZFS, SPL, and
+legion-laptop) and is 16 MiB on disk. ZFS/SPL and legion-laptop all report:
 
 ```
-vermagic: 7.2.15-eudaimonia-04 SMP preempt mod_unload
+vermagic: 7.2.15-eudaimonia-05 SMP preempt mod_unload
 ```
 
 ZFS/SPL are signed by the local build key. The current key ID reported by
@@ -135,7 +172,7 @@ clones the repo by default or accepts `--legion-source`.
 ## Verify
 
 ```sh
-./verify.sh --krel 7.2.15-eudaimonia-04
+./verify.sh --krel 7.2.15-eudaimonia-05
 ```
 
 It checks the four `/boot` artifacts, the config's local version and key
@@ -143,17 +180,24 @@ options, the module tree and `modules.dep`, ZFS/SPL/legion-laptop vermagic and
 signatures, and the initramfs contents (`zfs.ko`, `spl.ko`,
 `scripts/local-top/zfs`, `conf/conf.d/zfs`, `zfs`, `zpool`, `mount.zfs`).
 
-The `-04` initramfs is 12,982,091 bytes; the image is 14,786,560 bytes.
+The `-05` initramfs is 12,276,479 bytes; the image is 12,529,664 bytes.
 
 ## Boot testing
 
-The current ZFSBootMenu default is `-04`:
+The current ZFSBootMenu default is still the boot-tested `-04`:
 
 ```
 org.zfsbootmenu:kernel = vmlinuz-7.2.15-eudaimonia-04$
 ```
 
-The lean `-04` kernel has booted successfully.
+`-05` is installed under `/boot` but has not been boot-tested. Select its
+entry explicitly from ZFSBootMenu, or switch the property manually:
+
+```sh
+sudo zfs set org.zfsbootmenu:kernel='vmlinuz-7.2.15-eudaimonia-05$' rpool/ROOT/chimera
+```
+
+The lean `-04` kernel remains the safe default until `-05` boots.
 
 Roll back to `-01` from ZFSBootMenu if the kernel panics or X fails:
 
@@ -162,11 +206,24 @@ sudo zfs set org.zfsbootmenu:kernel='vmlinuz-7.2.15-eudaimonia-01$' rpool/ROOT/c
 ```
 
 The historical `-03` (`#7`) panicked with `Attempted to kill init!`; the cause
-is unknown. pstore is enabled in `-04`, so inspect `/sys/fs/pstore` after a
-failed boot.
+is unknown. pstore is enabled in `-04` and `-05`, so inspect
+`/sys/fs/pstore` after a failed boot.
 
 Do not copy the machine's ZFS host ID or `root=zfs:...` command line into other
 machines. On dinit systems, use `dinitctl`; `systemctl` is not available.
+
+## amd-pstate EPP boost
+
+`-05` includes `patches/0002-amd-pstate-epp-boost.patch`. The feature is
+opt-in and defaults off:
+
+```sh
+echo 1 > /sys/module/amd_pstate/parameters/epp_boost
+```
+
+It only acts in active mode on MSR/CPPC systems. The boot command line forces
+EPP `performance`, so the boost has little effect until EPP is lowered to
+`balance_performance` or dynamic EPP is enabled.
 
 ## linux-tkg reference files
 
