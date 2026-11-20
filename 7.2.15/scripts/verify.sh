@@ -168,6 +168,7 @@ if [[ -f "$CONFIG" ]]; then
         config_is CONFIG_DEBUG_INFO_BTF y
         config_is CONFIG_AMD_MEM_ENCRYPT y
         config_is CONFIG_KVM_AMD m
+        config_is CONFIG_FONT_TER16x32 y
     fi
 
     if [[ "$KREL" != *-eudaimonia-01* && "$KREL" != *-eudaimonia-03* && "$KREL" != *-eudaimonia-04* && "$KREL" != *-eudaimonia-05* ]]; then

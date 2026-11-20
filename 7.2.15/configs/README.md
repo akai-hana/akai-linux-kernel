@@ -10,7 +10,7 @@ They are used as-is by `../scripts/build.sh`, which only rewrites
 | `config-7.2.15-eudaimonia-02` | `-eudaimonia-01` (stale) | 2261 / 184 | Historical `#4`. Booted, but X failed because the boot entry was named `-02` while modules were installed under `-01`. |
 | `config-7.2.15-eudaimonia-03` | `-eudaimonia-03` | 2117 / 165 | Historical lean `#7`. Panicked with `Attempted to kill init!`; do not use. |
 | `config-7.2.15-eudaimonia-04` | `-eudaimonia-04` | 2252 / 170 | Previous build default and current ZFSBootMenu default. Conservative lean `#9` based on the `-02` config. Bridge enabled; Bluetooth and HDMI audio disabled. Boot-tested. |
-| `config-7.2.15-eudaimonia-05` | `-eudaimonia-05` | 2037 / 163 | Current build default. Leaner AMD-only profile based on `-04`: no Intel CPU support, NUMA, hibernation, HSA/P2P, ATA/SATA, legacy USB HCI, inactive LSMs, or zswap. Adds the amd-pstate EPP boost patch. Installed and statically verified, not yet boot-tested. |
+| `config-7.2.15-eudaimonia-05` | `-eudaimonia-05` | 2038 / 163 | Current build default. Leaner AMD-only profile based on `-04`: no Intel CPU support, NUMA, hibernation, HSA/P2P, ATA/SATA, legacy USB HCI, inactive LSMs, or zswap. Adds the amd-pstate EPP boost patch and enables `CONFIG_FONT_TER16x32` for the 2560x1600 panel. Installed and statically verified, not yet boot-tested. |
 
 The build script infers the target local version from the filename:
 

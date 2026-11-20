@@ -13,7 +13,7 @@ Toolchain: clang/LLD 22.1.8, `LLVM=1`, `CONFIG_CC_IS_CLANG=y`.
 | `configs/config-7.2.15-eudaimonia-02` | stored `-eudaimonia-01` | 213,069 B | 2261 / 184 | Historical `#4`; booted but X failed because the module tree did not match. Do not build as-is. |
 | `configs/config-7.2.15-eudaimonia-03` | `-eudaimonia-03` | 206,843 B | 2117 / 165 | Historical lean `#7`; panicked with `Attempted to kill init!`. Do not use. |
 | `configs/config-7.2.15-eudaimonia-04` | `-eudaimonia-04` | 212,222 B | 2252 / 170 | Previous default and current ZFSBootMenu default; conservative lean `#9` based on the `-02` config. Bridge enabled; Bluetooth and HDMI audio disabled. Boot-tested. |
-| `configs/config-7.2.15-eudaimonia-05` | `-eudaimonia-05` | 187,572 B | 2037 / 163 | Current build default; leaner AMD-only profile based on `-04`. Installed and statically verified, not yet boot-tested. Adds the amd-pstate EPP boost patch. |
+| `configs/config-7.2.15-eudaimonia-05` | `-eudaimonia-05` | 187,572 B | 2038 / 163 | Current build default; leaner AMD-only profile based on `-04`. Installed and statically verified, not yet boot-tested. Adds the amd-pstate EPP boost patch and the Terminus 16x32 console font. |
 
 ### The `-02` local-version bug
 
@@ -81,6 +81,11 @@ hibernation is disabled.
 AMD CPU mitigations (`RETPOLINE`, `RETHUNK`, `UNRET_ENTRY`, `IBPB_ENTRY`,
 `SRSO`, `SLS`, `RETBLEED`, `SPECTRE_V1/V2`, `SSB`, `TSA`, `VMSCAPE`) remain.
 Only Intel-specific mitigations disappear with `CPU_SUP_INTEL`.
+
+The 2560x1600 panel makes the default 8x16 console font very small. `-05`
+builds in the Terminus 16x32 font (`CONFIG_FONT_TER16x32=y`), which fbcon
+selects automatically at that resolution. On a lower-resolution display,
+force it with `fbcon=font:TER16x32` on the kernel command line.
 
 ### Docker bridge and audio
 
